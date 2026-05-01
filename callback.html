@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Connecting LinkedIn...</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      display: flex; align-items: center; justify-content: center;
+      height: 100vh; margin: 0;
+      background: #f3f2ef; color: #1B2A3B;
+    }
+    .box {
+      text-align: center; padding: 2rem;
+      background: white; border-radius: 12px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+      max-width: 360px;
+    }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid #e0e0e0;
+      border-top-color: #0A66C2;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 1rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    h2 { font-size: 16px; font-weight: 600; margin: 0 0 6px; }
+    p  { font-size: 13px; color: #666; margin: 0; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div class="spinner"></div>
+    <h2>Connecting your LinkedIn</h2>
+    <p>Hang tight, passing your credentials back...</p>
+  </div>
+  <script>
+    /*
+      LinkedIn redirects here after login with ?code=...&state=...
+      We relay that to the main app window via postMessage, then close.
+    */
+    const params = new URLSearchParams(window.location.search);
+    const code  = params.get('code');
+    const state = params.get('state');
+    const error = params.get('error');
+
+    if (window.opener) {
+      window.opener.postMessage({ type: 'LINKEDIN_OAUTH', code, state, error }, '*');
+      setTimeout(() => window.close(), 800);
+    } else {
+      // Fallback: store in sessionStorage so main page can poll
+      if (code) sessionStorage.setItem('li_code', code);
+      document.querySelector('p').textContent = 'You can close this tab and return to the app.';
+      document.querySelector('.spinner').style.display = 'none';
+    }
+  </script>
+</body>
+</html>

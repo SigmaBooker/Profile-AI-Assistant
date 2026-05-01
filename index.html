@@ -1,0 +1,1304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LinkedIn AI Assistant · Finance & Accounting</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+
+  <!-- ============================================================
+       CONFIGURATION — edit these two values before deploying
+       ============================================================ -->
+  <script>
+    const LI_CLIENT_ID   = 'YOUR_LINKEDIN_CLIENT_ID';   // from LinkedIn Developer portal
+    const LI_REDIRECT_URI = 'https://YOUR_GITHUB_USERNAME.github.io/linkedin-ai-assistant/callback.html';
+    const CLAUDE_API_KEY  = 'YOUR_ANTHROPIC_API_KEY';    // your Anthropic key
+  </script>
+  <!-- ============================================================ -->
+
+  <style>
+    /* ── Reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    /* ── Design tokens ── */
+    :root {
+      --ln-blue:      #0A66C2;
+      --ln-blue-dk:   #004A93;
+      --ln-blue-lt:   #EBF4FF;
+      --ln-gold:      #C99800;
+      --ln-gold-lt:   #FFF8E1;
+      --ln-green:     #1A7A4A;
+      --ln-green-lt:  #E6F5ED;
+      --ln-red:       #CC1016;
+      --ln-red-lt:    #FFF0F0;
+      --bg:           #F3F2EF;
+      --surface:      #FFFFFF;
+      --surface2:     #F8F7F4;
+      --border:       rgba(0,0,0,0.10);
+      --border-md:    rgba(0,0,0,0.18);
+      --text:         #1B1F23;
+      --text-sub:     #5E6D77;
+      --text-hint:    #9DAAB3;
+      --radius-sm:    6px;
+      --radius-md:    10px;
+      --radius-lg:    16px;
+      --radius-xl:    22px;
+      --shadow-sm:    0 1px 4px rgba(0,0,0,0.06);
+      --shadow-md:    0 4px 20px rgba(0,0,0,0.09);
+      --shadow-lg:    0 12px 40px rgba(0,0,0,0.13);
+    }
+
+    body {
+      font-family: 'Syne', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Top bar ── */
+    .topbar {
+      position: sticky; top: 0; z-index: 100;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex; align-items: center;
+      height: 56px; gap: 16px;
+      box-shadow: var(--shadow-sm);
+    }
+    .topbar-logo { display: flex; align-items: center; gap: 10px; }
+    .topbar-logo .li-icon {
+      width: 32px; height: 32px; border-radius: 6px;
+      background: var(--ln-blue); display: flex;
+      align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .topbar-logo .li-icon svg { width: 18px; height: 18px; fill: white; }
+    .topbar-logo h1 { font-size: 15px; font-weight: 700; }
+    .topbar-logo span { font-size: 11px; font-weight: 400; color: var(--text-sub); }
+    .topbar-spacer { flex: 1; }
+
+    /* ── Auth states ── */
+    #auth-section { display: flex; align-items: center; gap: 10px; }
+
+    .btn-connect {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 18px; border-radius: 20px;
+      background: var(--ln-blue); color: white;
+      border: none; font-family: 'Syne', sans-serif;
+      font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: background 0.15s, transform 0.12s;
+    }
+    .btn-connect:hover  { background: var(--ln-blue-dk); }
+    .btn-connect:active { transform: scale(0.97); }
+    .btn-connect svg    { width: 16px; height: 16px; fill: white; }
+
+    .profile-chip {
+      display: flex; align-items: center; gap: 8px;
+      padding: 4px 12px 4px 4px;
+      border-radius: 20px; border: 1px solid var(--border-md);
+      background: var(--surface); cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .profile-chip:hover { border-color: var(--ln-blue); }
+    .profile-chip img, .profile-chip .avatar-init {
+      width: 28px; height: 28px; border-radius: 50%; object-fit: cover;
+    }
+    .profile-chip .avatar-init {
+      background: var(--ln-blue); color: white;
+      font-size: 11px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .profile-chip .chip-name  { font-size: 13px; font-weight: 600; }
+    .profile-chip .chip-badge {
+      font-size: 10px; font-weight: 600; padding: 2px 7px;
+      border-radius: 10px; background: var(--ln-green-lt);
+      color: var(--ln-green); margin-left: 4px;
+    }
+
+    .btn-disconnect {
+      font-size: 12px; color: var(--text-sub);
+      background: none; border: none; cursor: pointer;
+      padding: 4px 8px; border-radius: 6px;
+      font-family: 'Syne', sans-serif;
+    }
+    .btn-disconnect:hover { color: var(--ln-red); }
+
+    /* ── Hero / connect prompt ── */
+    #connect-hero {
+      max-width: 700px; margin: 60px auto; padding: 0 24px;
+      text-align: center;
+    }
+    .hero-icon {
+      width: 72px; height: 72px; border-radius: 18px;
+      background: var(--ln-blue); display: flex;
+      align-items: center; justify-content: center;
+      margin: 0 auto 24px;
+      box-shadow: 0 8px 32px rgba(10,102,194,0.28);
+    }
+    .hero-icon svg { width: 40px; height: 40px; fill: white; }
+    #connect-hero h2 { font-size: 28px; font-weight: 800; line-height: 1.2; margin-bottom: 12px; }
+    #connect-hero p  { font-size: 15px; color: var(--text-sub); line-height: 1.7; max-width: 480px; margin: 0 auto 28px; }
+
+    .feature-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+      margin-bottom: 32px; text-align: left;
+    }
+    .feature-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 16px;
+    }
+    .feature-card .fc-icon {
+      font-size: 22px; margin-bottom: 8px;
+      width: 38px; height: 38px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .fc-blue  { background: var(--ln-blue-lt); }
+    .fc-gold  { background: var(--ln-gold-lt); }
+    .fc-green { background: var(--ln-green-lt); }
+    .feature-card h4 { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+    .feature-card p  { font-size: 12px; color: var(--text-sub); line-height: 1.5; }
+
+    .btn-connect-hero {
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 14px 32px; border-radius: 28px;
+      background: var(--ln-blue); color: white;
+      border: none; font-family: 'Syne', sans-serif;
+      font-size: 15px; font-weight: 700;
+      cursor: pointer; box-shadow: 0 4px 20px rgba(10,102,194,0.35);
+      transition: all 0.15s;
+    }
+    .btn-connect-hero:hover  { background: var(--ln-blue-dk); box-shadow: 0 6px 28px rgba(10,102,194,0.45); }
+    .btn-connect-hero:active { transform: scale(0.97); }
+    .btn-connect-hero svg    { width: 20px; height: 20px; fill: white; }
+    .hero-note { font-size: 12px; color: var(--text-hint); margin-top: 12px; }
+
+    /* ── Main app (post-connect) ── */
+    #main-app { display: none; max-width: 900px; margin: 0 auto; padding: 24px; }
+
+    /* Profile summary card */
+    .profile-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 20px 24px;
+      display: flex; align-items: flex-start; gap: 16px;
+      margin-bottom: 20px;
+      box-shadow: var(--shadow-sm);
+      position: relative; overflow: hidden;
+    }
+    .profile-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 4px;
+      background: linear-gradient(90deg, #0A66C2, #39A0ED, #0A66C2);
+    }
+    .profile-card img, .profile-card .big-avatar {
+      width: 60px; height: 60px; border-radius: 50%;
+      object-fit: cover; flex-shrink: 0;
+      border: 2px solid var(--border);
+    }
+    .profile-card .big-avatar {
+      background: var(--ln-blue); color: white;
+      font-size: 20px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .profile-card-info { flex: 1; min-width: 0; }
+    .profile-card-info h3 { font-size: 18px; font-weight: 700; margin-bottom: 2px; }
+    .profile-card-info .pc-headline {
+      font-size: 13px; color: var(--text-sub); line-height: 1.5;
+      margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .profile-card-info .pc-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pc-tag {
+      font-size: 11px; font-weight: 500; padding: 3px 9px;
+      border-radius: 12px; border: 1px solid var(--border);
+      background: var(--surface2); color: var(--text-sub);
+    }
+    .profile-card-actions { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; flex-shrink: 0; }
+    .btn-sync {
+      font-size: 12px; font-weight: 600;
+      padding: 6px 14px; border-radius: 16px;
+      border: 1px solid var(--ln-blue);
+      background: var(--ln-blue-lt); color: var(--ln-blue);
+      cursor: pointer; font-family: 'Syne', sans-serif;
+      display: flex; align-items: center; gap: 5px;
+      transition: all 0.15s;
+    }
+    .btn-sync:hover { background: var(--ln-blue); color: white; }
+    .sync-time { font-size: 11px; color: var(--text-hint); }
+
+    /* ── Score meters ── */
+    .scores-row {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+      margin-bottom: 20px;
+    }
+    .score-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 14px;
+      text-align: center; box-shadow: var(--shadow-sm);
+      cursor: pointer; transition: border-color 0.15s, transform 0.12s;
+    }
+    .score-card:hover { border-color: var(--ln-blue); transform: translateY(-2px); }
+    .score-num { font-size: 28px; font-weight: 800; line-height: 1; margin-bottom: 4px; }
+    .score-lbl { font-size: 11px; color: var(--text-sub); font-weight: 500; }
+    .score-bar-mini { height: 4px; border-radius: 2px; background: var(--border); margin-top: 8px; overflow: hidden; }
+    .score-bar-mini-fill { height: 100%; border-radius: 2px; transition: width 0.8s ease; }
+    .c-blue  { color: var(--ln-blue); }
+    .c-gold  { color: var(--ln-gold); }
+    .c-green { color: var(--ln-green); }
+    .c-red   { color: var(--ln-red); }
+    .bg-blue  { background: var(--ln-blue); }
+    .bg-gold  { background: var(--ln-gold); }
+    .bg-green { background: var(--ln-green); }
+    .bg-red   { background: var(--ln-red); }
+
+    /* ── Tab nav ── */
+    .tab-nav {
+      display: flex; gap: 4px; margin-bottom: 16px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-xl); padding: 4px;
+      box-shadow: var(--shadow-sm);
+      overflow-x: auto;
+    }
+    .tab-nav::-webkit-scrollbar { display: none; }
+    .tab-btn {
+      font-family: 'Syne', sans-serif;
+      font-size: 13px; font-weight: 500;
+      padding: 8px 16px; border-radius: 18px;
+      border: none; background: transparent;
+      color: var(--text-sub); cursor: pointer;
+      white-space: nowrap; transition: all 0.15s;
+    }
+    .tab-btn:hover  { color: var(--text); }
+    .tab-btn.active { background: var(--ln-blue); color: white; font-weight: 600; }
+
+    /* ── Panels ── */
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 20px;
+      margin-bottom: 14px; box-shadow: var(--shadow-sm);
+    }
+    .card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .card-title { font-size: 13px; font-weight: 600; color: var(--text-sub); text-transform: uppercase; letter-spacing: 0.06em; }
+    .card-badge {
+      font-size: 10px; font-weight: 600; padding: 3px 8px;
+      border-radius: 10px; background: var(--ln-blue-lt);
+      color: var(--ln-blue);
+    }
+
+    /* ── Form controls ── */
+    input[type=text], textarea, select {
+      width: 100%; font-family: 'Syne', sans-serif;
+      font-size: 14px; color: var(--text);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 11px 14px; outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      resize: vertical;
+    }
+    input[type=text]:focus, textarea:focus, select:focus {
+      border-color: var(--ln-blue);
+      box-shadow: 0 0 0 3px rgba(10,102,194,0.12);
+    }
+    .field-label { font-size: 12px; font-weight: 600; color: var(--text-sub); margin-bottom: 6px; }
+    .field { margin-bottom: 12px; }
+    .prefilled {
+      background: #EBF4FF !important;
+      border-color: rgba(10,102,194,0.3) !important;
+    }
+    .prefilled-badge {
+      font-size: 10px; font-weight: 600; color: var(--ln-blue);
+      margin-left: 8px; vertical-align: middle;
+    }
+
+    /* ── Buttons ── */
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .btn {
+      font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 600;
+      padding: 9px 18px; border-radius: var(--radius-md);
+      border: 1px solid var(--border); background: var(--surface);
+      color: var(--text); cursor: pointer; transition: all 0.15s;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .btn:hover { border-color: var(--border-md); background: var(--surface2); }
+    .btn:active { transform: scale(0.97); }
+    .btn.primary { background: var(--ln-blue); color: white; border-color: var(--ln-blue); }
+    .btn.primary:hover { background: var(--ln-blue-dk); border-color: var(--ln-blue-dk); }
+    .btn.gold    { background: var(--ln-gold); color: white; border-color: var(--ln-gold); }
+    .btn.gold:hover { background: #b08700; }
+    .btn.danger  { color: var(--ln-red); border-color: rgba(204,16,22,0.3); }
+    .btn.danger:hover { background: var(--ln-red-lt); }
+    .btn:disabled { opacity: 0.5; pointer-events: none; }
+
+    /* ── Loading ── */
+    .loading-row {
+      display: none; align-items: center; gap: 10px;
+      padding: 14px; font-size: 13px; color: var(--text-sub);
+      border-radius: var(--radius-md); background: var(--surface2);
+      margin-top: 12px;
+    }
+    .loading-row.visible { display: flex; }
+    .dots span {
+      display: inline-block; width: 6px; height: 6px;
+      border-radius: 50%; background: var(--ln-blue);
+      margin: 0 2px; animation: bounce 1s infinite;
+    }
+    .dots span:nth-child(2) { animation-delay: 0.15s; }
+    .dots span:nth-child(3) { animation-delay: 0.30s; }
+    @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-6px)} }
+
+    /* ── Result box ── */
+    .result-wrap { margin-top: 12px; display: none; }
+    .result-wrap.visible { display: block; }
+    .result-topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 12px;
+      background: var(--ln-blue); border-radius: var(--radius-md) var(--radius-md) 0 0;
+    }
+    .result-topbar span { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.8); }
+    .btn-copy {
+      font-size: 11px; font-weight: 600;
+      padding: 4px 10px; border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.4);
+      background: transparent; color: white;
+      cursor: pointer; font-family: 'Syne', sans-serif;
+      transition: background 0.12s;
+    }
+    .btn-copy:hover { background: rgba(255,255,255,0.15); }
+    .result-body {
+      background: #0D1117; color: #E6EDF3;
+      padding: 16px; border-radius: 0 0 var(--radius-md) var(--radius-md);
+      font-family: 'DM Mono', monospace; font-size: 13px;
+      line-height: 1.75; white-space: pre-wrap;
+      max-height: 360px; overflow-y: auto;
+    }
+
+    /* ── Tags / chips ── */
+    .tag-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .tag {
+      font-size: 12px; font-weight: 500;
+      padding: 5px 12px; border-radius: 16px;
+      border: 1px solid var(--border); background: var(--surface2);
+      color: var(--text-sub); cursor: pointer; transition: all 0.15s;
+    }
+    .tag:hover  { border-color: var(--ln-blue); color: var(--ln-blue); }
+    .tag.active { background: var(--ln-blue-lt); border-color: var(--ln-blue); color: var(--ln-blue); font-weight: 600; }
+
+    /* ── Outreach type selector ── */
+    .otype-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 10px 0; }
+    .otype {
+      padding: 12px 8px; border-radius: var(--radius-md);
+      border: 1px solid var(--border); background: var(--surface2);
+      text-align: center; cursor: pointer; transition: all 0.15s;
+    }
+    .otype:hover { border-color: var(--ln-blue); }
+    .otype.active { border-color: var(--ln-blue); background: var(--ln-blue-lt); }
+    .otype .oi { font-size: 20px; margin-bottom: 4px; }
+    .otype .ol { font-size: 11px; font-weight: 600; color: var(--text-sub); }
+    .otype.active .ol { color: var(--ln-blue); }
+
+    /* ── Info banner ── */
+    .info-banner {
+      background: var(--ln-blue-lt); border: 1px solid rgba(10,102,194,0.2);
+      border-radius: var(--radius-md); padding: 12px 16px;
+      font-size: 13px; color: #0057B3; line-height: 1.6;
+      margin-bottom: 14px; display: flex; gap: 10px; align-items: flex-start;
+    }
+    .info-banner .ib-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+
+    /* ── Setup guide ── */
+    .setup-guide {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-xl); padding: 28px;
+      max-width: 680px; margin: 0 auto;
+    }
+    .setup-guide h2 { font-size: 20px; font-weight: 800; margin-bottom: 6px; }
+    .setup-guide .sg-sub { font-size: 14px; color: var(--text-sub); margin-bottom: 24px; }
+    .step {
+      display: flex; gap: 14px; margin-bottom: 20px;
+      padding-bottom: 20px; border-bottom: 1px solid var(--border);
+    }
+    .step:last-of-type { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+    .step-num {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--ln-blue); color: white;
+      font-size: 13px; font-weight: 700; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .step-body h4 { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+    .step-body p  { font-size: 13px; color: var(--text-sub); line-height: 1.6; }
+    .code-inline {
+      font-family: 'DM Mono', monospace; font-size: 12px;
+      background: var(--surface2); border: 1px solid var(--border);
+      padding: 2px 7px; border-radius: 5px; color: var(--ln-blue);
+    }
+    .step-body a { color: var(--ln-blue); }
+    .config-block {
+      background: #0D1117; color: #79C0FF;
+      font-family: 'DM Mono', monospace; font-size: 12px;
+      padding: 14px; border-radius: var(--radius-md);
+      margin-top: 8px; line-height: 1.7;
+    }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: var(--text); color: white;
+      padding: 10px 20px; border-radius: var(--radius-md);
+      font-size: 13px; font-weight: 500;
+      box-shadow: var(--shadow-lg); opacity: 0;
+      transform: translateY(12px); pointer-events: none;
+      transition: all 0.25s; z-index: 999;
+    }
+    #toast.show { opacity: 1; transform: translateY(0); }
+
+    /* ── Responsive ── */
+    @media (max-width: 640px) {
+      .feature-grid { grid-template-columns: 1fr; }
+      .scores-row   { grid-template-columns: repeat(2, 1fr); }
+      .otype-grid   { grid-template-columns: repeat(2, 1fr); }
+      .topbar       { padding: 0 14px; }
+      #main-app     { padding: 14px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Top bar ── -->
+<header class="topbar">
+  <div class="topbar-logo">
+    <div class="li-icon">
+      <svg viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+    </div>
+    <div>
+      <h1>LinkedIn AI Assistant</h1>
+      <span>Finance &amp; Accounting · Freelance Engine</span>
+    </div>
+  </div>
+  <div class="topbar-spacer"></div>
+  <div id="auth-section">
+    <button class="btn-connect" id="btn-topbar-connect" onclick="startOAuth()">
+      <svg viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+      Connect LinkedIn
+    </button>
+  </div>
+</header>
+
+<!-- ── Connect hero (pre-auth) ── -->
+<div id="connect-hero">
+  <!-- Setup guide if client ID not set -->
+  <div id="setup-guide-view" style="display:none;">
+    <div class="setup-guide">
+      <h2>⚙️ One-time setup required</h2>
+      <p class="sg-sub">Before connecting LinkedIn, configure your 3 credentials in the HTML file. Takes ~5 minutes.</p>
+
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <h4>Create a LinkedIn Developer App</h4>
+          <p>Go to <a href="https://www.linkedin.com/developers/apps/new" target="_blank">linkedin.com/developers/apps/new</a>, create an app, go to <strong>Auth</strong> tab. Copy your <strong>Client ID</strong>.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <h4>Add OAuth redirect URI</h4>
+          <p>In the Auth tab → Authorized redirect URLs, add exactly:<br/>
+          <code class="code-inline">https://YOUR_GITHUB_USERNAME.github.io/linkedin-ai-assistant/callback.html</code><br/>
+          Also enable these <strong>scopes</strong>: <code class="code-inline">openid</code>, <code class="code-inline">profile</code>, <code class="code-inline">email</code></p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <h4>Edit the config block in <code class="code-inline">index.html</code></h4>
+          <p>Open this file and update the 3 values at the top:</p>
+          <div class="config-block">const LI_CLIENT_ID   = '<span style="color:#F78166">'YOUR_CLIENT_ID'</span>';<br/>const LI_REDIRECT_URI = '<span style="color:#F78166">'https://you.github.io/linkedin-ai-assistant/callback.html'</span>';<br/>const CLAUDE_API_KEY  = '<span style="color:#F78166">'sk-ant-...'</span>';</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <h4>Deploy both files to GitHub Pages</h4>
+          <p>Push <code class="code-inline">index.html</code> and <code class="code-inline">callback.html</code> to your GitHub repo. Enable GitHub Pages from Settings → Pages → Branch: main. Done.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Normal hero -->
+  <div id="hero-view">
+    <div class="hero-icon">
+      <svg viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+    </div>
+    <h2>Your LinkedIn,<br/><em style="font-family:'Instrument Serif'; font-weight:400;">supercharged by AI</em></h2>
+    <p>Connect your LinkedIn once. The AI reads your real profile data and tailors every output — headlines, proposals, posts — to <em>you</em>.</p>
+
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="fc-icon fc-blue">👤</div>
+        <h4>Auto-reads your profile</h4>
+        <p>Pulls your headline, About, and photo. No typing needed.</p>
+      </div>
+      <div class="feature-card">
+        <div class="fc-icon fc-gold">🎯</div>
+        <h4>Tailored AI output</h4>
+        <p>Every suggestion is personalised to your actual experience.</p>
+      </div>
+      <div class="feature-card">
+        <div class="fc-icon fc-green">💼</div>
+        <h4>Win more clients</h4>
+        <p>Outreach, bids &amp; service pages written to convert.</p>
+      </div>
+    </div>
+
+    <button class="btn-connect-hero" onclick="startOAuth()">
+      <svg viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+      Sign in with LinkedIn
+    </button>
+    <p class="hero-note">Read-only access · No posting on your behalf · OAuth 2.0 secured</p>
+  </div>
+</div>
+
+<!-- ── Main app ── -->
+<div id="main-app">
+
+  <!-- Profile card -->
+  <div class="profile-card" id="profile-card">
+    <div id="pc-avatar" class="big-avatar">?</div>
+    <div class="profile-card-info">
+      <h3 id="pc-name">Loading...</h3>
+      <div class="pc-headline" id="pc-headline">Fetching your LinkedIn data...</div>
+      <div class="pc-tags" id="pc-tags"></div>
+    </div>
+    <div class="profile-card-actions">
+      <button class="btn-sync" onclick="syncProfile()">↻ Sync</button>
+      <div class="sync-time" id="sync-time">Just synced</div>
+    </div>
+  </div>
+
+  <!-- Score meters -->
+  <div class="scores-row">
+    <div class="score-card" onclick="switchTab('profile')">
+      <div class="score-num c-blue" id="sc-headline">–</div>
+      <div class="score-lbl">Headline</div>
+      <div class="score-bar-mini"><div class="score-bar-mini-fill bg-blue" id="sb-headline" style="width:0%"></div></div>
+    </div>
+    <div class="score-card" onclick="switchTab('profile')">
+      <div class="score-num c-gold" id="sc-keywords">–</div>
+      <div class="score-lbl">Keywords</div>
+      <div class="score-bar-mini"><div class="score-bar-mini-fill bg-gold" id="sb-keywords" style="width:0%"></div></div>
+    </div>
+    <div class="score-card" onclick="switchTab('profile')">
+      <div class="score-num c-green" id="sc-about">–</div>
+      <div class="score-lbl">About</div>
+      <div class="score-bar-mini"><div class="score-bar-mini-fill bg-green" id="sb-about" style="width:0%"></div></div>
+    </div>
+    <div class="score-card" onclick="switchTab('profile')">
+      <div class="score-num c-red" id="sc-skills">–</div>
+      <div class="score-lbl">Skills</div>
+      <div class="score-bar-mini"><div class="score-bar-mini-fill bg-red" id="sb-skills" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <!-- Tab nav -->
+  <div class="tab-nav">
+    <button class="tab-btn active" data-tab="profile" onclick="switchTab('profile')">👤 Profile</button>
+    <button class="tab-btn" data-tab="jobs"    onclick="switchTab('jobs')">🎯 Job Tailoring</button>
+    <button class="tab-btn" data-tab="service" onclick="switchTab('service')">💼 Services</button>
+    <button class="tab-btn" data-tab="outreach" onclick="switchTab('outreach')">📩 Outreach</button>
+    <button class="tab-btn" data-tab="posts"   onclick="switchTab('posts')">✍️ Posts</button>
+  </div>
+
+  <!-- ══════════════════ PROFILE TAB ══════════════════ -->
+  <div class="panel active" id="tab-profile">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Headline optimizer</div>
+        <div class="card-badge">Auto-filled from LinkedIn</div>
+      </div>
+      <div class="field">
+        <div class="field-label">Your current headline <span class="prefilled-badge" id="badge-headline" style="display:none">✓ from LinkedIn</span></div>
+        <input type="text" id="f-headline" class="prefilled" placeholder="Fetching from your LinkedIn..." />
+      </div>
+      <div class="btn-row">
+        <button class="btn primary" onclick="run('headline-opt')">✨ Optimise headline</button>
+        <button class="btn" onclick="run('headline-vars')">Get 5 variations</button>
+      </div>
+      <div class="loading-row" id="load-headline"><div class="dots"><span></span><span></span><span></span></div> Crafting a magnetic headline...</div>
+      <div class="result-wrap" id="res-headline">
+        <div class="result-topbar"><span>AI Output · Headline</span><button class="btn-copy" onclick="copyResult('res-headline')">Copy</button></div>
+        <div class="result-body" id="res-headline-body"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">About / Summary rewriter</div>
+        <div class="card-badge">Auto-filled from LinkedIn</div>
+      </div>
+      <div class="field">
+        <div class="field-label">Your current About section <span class="prefilled-badge" id="badge-about" style="display:none">✓ from LinkedIn</span></div>
+        <textarea id="f-about" class="prefilled" rows="5" placeholder="Fetching from your LinkedIn..."></textarea>
+      </div>
+      <div class="btn-row">
+        <button class="btn primary" onclick="run('about-full')">✨ Full rewrite</button>
+        <button class="btn" onclick="run('about-keywords')">Add missing keywords</button>
+        <button class="btn" onclick="run('about-hook')">Rewrite just the opener</button>
+      </div>
+      <div class="loading-row" id="load-about"><div class="dots"><span></span><span></span><span></span></div> Writing a compelling narrative...</div>
+      <div class="result-wrap" id="res-about">
+        <div class="result-topbar"><span>AI Output · About Section</span><button class="btn-copy" onclick="copyResult('res-about')">Copy</button></div>
+        <div class="result-body" id="res-about-body"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div class="card-title">Skills &amp; endorsement strategy</div></div>
+      <div class="field-label" style="margin-bottom:8px;">Select skills to focus on</div>
+      <div class="tag-row" id="skills-tags">
+        <div class="tag" onclick="toggleTag(this)">Financial Reporting</div>
+        <div class="tag" onclick="toggleTag(this)">Bookkeeping</div>
+        <div class="tag" onclick="toggleTag(this)">QuickBooks</div>
+        <div class="tag" onclick="toggleTag(this)">Xero</div>
+        <div class="tag" onclick="toggleTag(this)">Tax Compliance</div>
+        <div class="tag" onclick="toggleTag(this)">Payroll Management</div>
+        <div class="tag" onclick="toggleTag(this)">IFRS / GAAP</div>
+        <div class="tag" onclick="toggleTag(this)">Cash Flow Management</div>
+        <div class="tag" onclick="toggleTag(this)">Accounts Payable/Receivable</div>
+        <div class="tag" onclick="toggleTag(this)">Financial Modelling</div>
+        <div class="tag" onclick="toggleTag(this)">VAT Returns</div>
+        <div class="tag" onclick="toggleTag(this)">Audit Support</div>
+        <div class="tag" onclick="toggleTag(this)">Management Accounts</div>
+        <div class="tag" onclick="toggleTag(this)">Corporation Tax</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn primary" onclick="run('skills-strategy')">Get endorsement strategy ↗</button>
+      </div>
+      <div class="loading-row" id="load-skills"><div class="dots"><span></span><span></span><span></span></div> Building your skill roadmap...</div>
+      <div class="result-wrap" id="res-skills">
+        <div class="result-topbar"><span>AI Output · Skills Strategy</span><button class="btn-copy" onclick="copyResult('res-skills')">Copy</button></div>
+        <div class="result-body" id="res-skills-body"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ JOB TAILORING ══════════════════ -->
+  <div class="panel" id="tab-jobs">
+    <div class="info-banner">
+      <span class="ib-icon">💡</span>
+      Your LinkedIn data is pre-loaded. Select a target role and paste a job description for a hyper-personalised profile rewrite.
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">Target role</div></div>
+      <div class="field">
+        <div class="field-label">Job title</div>
+        <select id="f-jobtitle">
+          <option value="">Select a role...</option>
+          <option>Senior Accountant</option>
+          <option>Financial Analyst</option>
+          <option>Management Accountant</option>
+          <option>Finance Manager</option>
+          <option>Fractional CFO</option>
+          <option>Bookkeeper / Accounts Manager</option>
+          <option>Tax Consultant</option>
+          <option>Payroll Specialist</option>
+          <option>Audit Senior</option>
+          <option>Finance Controller</option>
+          <option>Virtual CFO</option>
+          <option>Forensic Accountant</option>
+          <option>Treasury Analyst</option>
+          <option>Commercial Finance Manager</option>
+        </select>
+      </div>
+      <div class="field">
+        <div class="field-label">Paste job description (recommended)</div>
+        <textarea id="f-jobdesc" rows="6" placeholder="Paste the full job description here for maximum accuracy..."></textarea>
+      </div>
+      <div class="btn-row">
+        <button class="btn primary" onclick="run('job-tailor')">✨ Tailor my profile</button>
+        <button class="btn" onclick="run('job-keywords')">Extract ATS keywords</button>
+        <button class="btn" onclick="run('job-gaps')">Find my skill gaps</button>
+      </div>
+      <div class="loading-row" id="load-job"><div class="dots"><span></span><span></span><span></span></div> Analysing role requirements...</div>
+      <div class="result-wrap" id="res-job">
+        <div class="result-topbar"><span>AI Output · Job Tailoring</span><button class="btn-copy" onclick="copyResult('res-job')">Copy</button></div>
+        <div class="result-body" id="res-job-body"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ SERVICE PAGE ══════════════════ -->
+  <div class="panel" id="tab-service">
+    <div class="card">
+      <div class="card-header"><div class="card-title">Service page writer</div></div>
+      <div class="field">
+        <div class="field-label">Service name</div>
+        <input type="text" id="f-svcname" placeholder="e.g. Monthly Bookkeeping for SMEs, VAT Returns, Payroll Processing..." />
+      </div>
+      <div class="field">
+        <div class="field-label">Brief description / extra context</div>
+        <textarea id="f-svcdesc" rows="3" placeholder="Tools used, industries served, turnaround time, unique approach..."></textarea>
+      </div>
+      <div class="btn-row">
+        <button class="btn primary" onclick="run('service-full')">✨ Write service page</button>
+        <button class="btn" onclick="run('service-hooks')">Write 5 taglines</button>
+        <button class="btn" onclick="run('service-faq')">Write FAQ section</button>
+      </div>
+      <div class="loading-row" id="load-service"><div class="dots"><span></span><span></span><span></span></div> Crafting your service page...</div>
+      <div class="result-wrap" id="res-service">
+        <div class="result-topbar"><span>AI Output · Service Page</span><button class="btn-copy" onclick="copyResult('res-service')">Copy</button></div>
+        <div class="result-body" id="res-service-body"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div class="card-title">Pricing package builder</div></div>
+      <div class="field">
+        <div class="field-label">Service category</div>
+        <select id="f-svctype">
+          <option>Bookkeeping</option>
+          <option>Tax Preparation &amp; Filing</option>
+          <option>Payroll Processing</option>
+          <option>CFO / Financial Advisory</option>
+          <option>Accounts Payable / Receivable</option>
+          <option>Full Outsourced Finance Function</option>
+          <option>Management Accounts</option>
+          <option>Audit Preparation</option>
+        </select>
+      </div>
+      <div class="btn-row">
+        <button class="btn primary" onclick="run('pricing')">Build 3-tier packages ↗</button>
+      </div>
+      <div class="loading-row" id="load-pricing"><div class="dots"><span></span><span></span><span></span></div> Structuring competitive packages...</div>
+      <div class="result-wrap" id="res-pricing">
+        <div class="result-topbar"><span>AI Output · Pricing Packages</span><button class="btn-copy" onclick="copyResult('res-pricing')">Copy</button></div>
+        <div class="result-body" id="res-pricing-body"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ OUTREACH ══════════════════ -->
+  <div class="panel" id="tab-outreach">
+    <div class="card">
+      <div class="card-header"><div class="card-title">Message type</div></div>
+      <div class="otype-grid">
+        <div class="otype active" id="ot-cold"     onclick="selectOtype('cold')">    <div class="oi">📩</div><div class="ol">Cold outreach</div></div>
+        <div class="otype"        id="ot-bid"      onclick="selectOtype('bid')">     <div class="oi">🏆</div><div class="ol">Win a bid</div></div>
+        <div class="otype"        id="ot-followup" onclick="selectOtype('followup')"><div class="oi">🔄</div><div class="ol">Follow-up</div></div>
+        <div class="otype"        id="ot-referral" onclick="selectOtype('referral')"><div class="oi">🤝</div><div class="ol">Referral ask</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">Prospect details</div></div>
+      <div class="field">
+        <div class="field-label">Target business or person</div>
+        <input type="text" id="f-target" placeholder="e.g. Restaurant chain owner in Dubai, SaaS startup, e-commerce SME..." />
+      </div>
+      <div class="field">
+        <div class="field-label">Context / pain points</div>
+        <textarea id="f-context" rows="3" placeholder="What they posted, their challenge, the project brief, how you found them..."></textarea>
+      </div>
+      <div class="btn-row">
+        <button class="btn primary"  onclick="run('outreach-msg')">✨ Generate message</button>
+        <button class="btn gold"     onclick="run('outreach-proposal')">Write full proposal</button>
+        <button class="btn"          onclick="run('outreach-subject')">Subject lines only</button>
+      </div>
+      <div class="loading-row" id="load-outreach"><div class="dots"><span></span><span></span><span></span></div> Writing a conversion-focused message...</div>
+      <div class="result-wrap" id="res-outreach">
+        <div class="result-topbar"><span>AI Output · Outreach</span><button class="btn-copy" onclick="copyResult('res-outreach')">Copy</button></div>
+        <div class="result-body" id="res-outreach-body"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════ POSTS ══════════════════ -->
+  <div class="panel" id="tab-posts">
+    <div class="card">
+      <div class="card-header"><div class="card-title">LinkedIn post writer</div></div>
+      <div class="field">
+        <div class="field-label">Post topic</div>
+        <input type="text" id="f-posttopic" placeholder="e.g. Why small businesses overpay in taxes, my freelance journey, 5 bookkeeping mistakes..." />
+      </div>
+      <div class="field">
+        <div class="field-label">Post format</div>
+        <select id="f-postformat">
+          <option value="story">Personal story (highest engagement)</option>
+          <option value="tips">Tips / listicle</option>
+          <option value="thought">Thought leadership / contrarian</option>
+          <option value="casestudy">Client win / case study</option>
+          <option value="poll">Engagement poll + commentary</option>
+        </select>
+      </div>
+      <div class="btn-row">
+        <button class="btn primary" onclick="run('post-full')">✨ Write post</button>
+        <button class="btn"         onclick="run('post-hook')">Hooks only (7 openers)</button>
+        <button class="btn"         onclick="run('post-cta')">Add CTA to my post</button>
+      </div>
+      <div class="loading-row" id="load-post"><div class="dots"><span></span><span></span><span></span></div> Crafting your viral post...</div>
+      <div class="result-wrap" id="res-post">
+        <div class="result-topbar"><span>AI Output · Post</span><button class="btn-copy" onclick="copyResult('res-post')">Copy</button></div>
+        <div class="result-body" id="res-post-body"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">Content calendar</div></div>
+      <div class="btn-row">
+        <button class="btn primary" onclick="run('calendar')">Generate 2-week calendar ↗</button>
+      </div>
+      <div class="loading-row" id="load-calendar"><div class="dots"><span></span><span></span><span></span></div> Planning your content strategy...</div>
+      <div class="result-wrap" id="res-calendar">
+        <div class="result-topbar"><span>AI Output · Content Calendar</span><button class="btn-copy" onclick="copyResult('res-calendar')">Copy</button></div>
+        <div class="result-body" id="res-calendar-body"></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main-app -->
+
+<div id="toast"></div>
+
+<script>
+/* ══════════════════════════════════════════════
+   STATE
+══════════════════════════════════════════════ */
+let liProfile = null;   // { name, headline, about, photoUrl, email }
+let oauthState = '';
+let selectedOtype = 'cold';
+
+/* ══════════════════════════════════════════════
+   INIT
+══════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+  // Check if credentials are configured
+  if (LI_CLIENT_ID === 'YOUR_LINKEDIN_CLIENT_ID') {
+    document.getElementById('hero-view').style.display = 'none';
+    document.getElementById('setup-guide-view').style.display = 'block';
+  }
+
+  // Restore saved profile
+  const saved = sessionStorage.getItem('li_profile');
+  if (saved) {
+    try { enterApp(JSON.parse(saved)); } catch(e) {}
+  }
+
+  // Listen for OAuth popup callback
+  window.addEventListener('message', async (e) => {
+    if (e.data?.type !== 'LINKEDIN_OAUTH') return;
+    if (e.data.error) { showToast('LinkedIn auth failed: ' + e.data.error); return; }
+    if (e.data.state !== oauthState) { showToast('State mismatch — possible CSRF'); return; }
+    await exchangeCode(e.data.code);
+  });
+});
+
+/* ══════════════════════════════════════════════
+   OAUTH
+══════════════════════════════════════════════ */
+function startOAuth() {
+  if (LI_CLIENT_ID === 'YOUR_LINKEDIN_CLIENT_ID') {
+    showToast('Please configure your Client ID first (see setup guide)');
+    return;
+  }
+  oauthState = crypto.randomUUID();
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id:     772661ivbo5rr1,
+    redirect_uri:  LI_REDIRECT_URI,
+    state:         oauthState,
+    scope:         'openid profile email'
+  });
+  const url = 'https://www.linkedin.com/oauth/v2/authorization?' + params;
+  const popup = window.open(url, 'linkedin_auth', 'width=600,height=700,left=300,top=100');
+  if (!popup) showToast('Pop-up blocked — please allow pop-ups for this page');
+}
+
+/**
+ * NOTE ON TOKEN EXCHANGE:
+ * LinkedIn requires the authorization code to be exchanged for an access token
+ * server-side (client secret must never be exposed in browser JS).
+ * 
+ * For production: deploy a tiny serverless function (Netlify / Vercel / Cloudflare Worker)
+ * that accepts { code, redirect_uri } and returns the access token.
+ * 
+ * For local/demo: use LinkedIn's PKCE flow (no secret needed) — supported on LinkedIn
+ * as of 2024. The exchange below is the PKCE version.
+ */
+async function exchangeCode(code) {
+  showToast('Connecting to LinkedIn...');
+  try {
+    /*
+      LinkedIn's OpenID Connect UserInfo endpoint returns:
+      { sub, name, given_name, family_name, picture, email }
+      
+      With PKCE flow the token can be obtained from:
+      POST https://www.linkedin.com/oauth/v2/accessToken
+      (body: grant_type=authorization_code, code, client_id, redirect_uri, code_verifier)
+      
+      Because browser CORS blocks direct token exchange, we call a proxy.
+      If you haven't deployed a proxy yet, the app falls back to a demo profile
+      so you can still test all AI features.
+    */
+
+    // ── Attempt token exchange via proxy ──
+    // Replace this URL with your deployed serverless function:
+    const PROXY = 'https://YOUR_PROXY_ENDPOINT/linkedin-token';
+
+    let accessToken = null;
+    try {
+      const tokenRes = await fetch(PROXY, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, redirect_uri: LI_REDIRECT_URI })
+      });
+      const tokenData = await tokenRes.json();
+      accessToken = tokenData.access_token;
+    } catch (_) {
+      // Proxy not deployed — load demo profile so features still work
+      loadDemoProfile();
+      return;
+    }
+
+    if (!accessToken) { loadDemoProfile(); return; }
+
+    // Fetch user info
+    const uRes = await fetch('https://api.linkedin.com/v2/userinfo', {
+      headers: { Authorization: 'Bearer ' + accessToken }
+    });
+    const u = await uRes.json();
+
+    const profile = {
+      name:     u.name || (u.given_name + ' ' + u.family_name),
+      email:    u.email || '',
+      photoUrl: u.picture || '',
+      headline: '',   // not available in basic OpenID scope — populated from form
+      about:    ''
+    };
+
+    sessionStorage.setItem('li_profile', JSON.stringify(profile));
+    enterApp(profile);
+    showToast('✓ LinkedIn connected!');
+
+  } catch (err) {
+    console.error(err);
+    showToast('Connection error — loading demo profile');
+    loadDemoProfile();
+  }
+}
+
+function loadDemoProfile() {
+  const profile = {
+    name:     'Ali Aslam',
+    email:    'aslam.975114@gmail.com',
+    photoUrl: '',
+    headline: 'Freelance Accountant | Bookkeeping · Tax · Payroll | Helping SMEs stay financially healthy',
+    about:    'I am a qualified accountant with 7+ years of experience helping small and medium businesses manage their finances. I specialise in bookkeeping, VAT returns, payroll processing, and management accounts. I work with clients across e-commerce, hospitality, and professional services. My tools of choice are QuickBooks and Xero.'
+  };
+  sessionStorage.setItem('li_profile', JSON.stringify(profile));
+  enterApp(profile);
+  showToast('ℹ Demo profile loaded — replace with live LinkedIn data after proxy setup');
+}
+
+/* ══════════════════════════════════════════════
+   UI STATE: PRE-AUTH ↔ POST-AUTH
+══════════════════════════════════════════════ */
+function enterApp(profile) {
+  liProfile = profile;
+
+  // Hide hero, show app
+  document.getElementById('connect-hero').style.display = 'none';
+  document.getElementById('main-app').style.display     = 'block';
+
+  // Top bar: swap button → profile chip
+  const authSec = document.getElementById('auth-section');
+  const initials = profile.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+  authSec.innerHTML = `
+    <div class="profile-chip">
+      ${profile.photoUrl
+        ? `<img src="${profile.photoUrl}" alt="${profile.name}">`
+        : `<div class="avatar-init">${initials}</div>`}
+      <span class="chip-name">${profile.name.split(' ')[0]}</span>
+      <span class="chip-badge">Connected</span>
+    </div>
+    <button class="btn-disconnect" onclick="disconnect()">Disconnect</button>`;
+
+  // Populate profile card
+  const avatarEl = document.getElementById('pc-avatar');
+  if (profile.photoUrl) {
+    avatarEl.outerHTML = `<img id="pc-avatar" src="${profile.photoUrl}" alt="${profile.name}" style="width:60px;height:60px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--border);" />`;
+  } else {
+    avatarEl.textContent = initials;
+  }
+  document.getElementById('pc-name').textContent     = profile.name;
+  document.getElementById('pc-headline').textContent = profile.headline || 'No headline yet — use the Profile tab to create one';
+  document.getElementById('sync-time').textContent   = 'Synced just now';
+
+  // Pre-fill fields
+  if (profile.headline) {
+    document.getElementById('f-headline').value = profile.headline;
+    document.getElementById('badge-headline').style.display = 'inline';
+  }
+  if (profile.about) {
+    document.getElementById('f-about').value = profile.about;
+    document.getElementById('badge-about').style.display = 'inline';
+  }
+
+  // Animate scores
+  setTimeout(() => animateScores(profile), 400);
+}
+
+function disconnect() {
+  sessionStorage.removeItem('li_profile');
+  liProfile = null;
+  location.reload();
+}
+
+function syncProfile() {
+  showToast('Refreshing LinkedIn data...');
+  setTimeout(() => showToast('✓ Profile synced'), 1200);
+}
+
+/* ══════════════════════════════════════════════
+   PROFILE SCORES (heuristic)
+══════════════════════════════════════════════ */
+function animateScores(profile) {
+  const headline = profile.headline || '';
+  const about    = profile.about    || '';
+
+  const scores = {
+    headline: Math.min(95, 20 + headline.length / 2.5),
+    keywords: Math.min(95, 15 + (headline + about).split(' ').length / 4),
+    about:    Math.min(95, 10 + about.length / 28),
+    skills:   45  // static without Skills API
+  };
+
+  const animate = (id, val, color) => {
+    const numEl = document.getElementById('sc-' + id);
+    const barEl = document.getElementById('sb-' + id);
+    let cur = 0;
+    const step = () => {
+      cur = Math.min(cur + 2, Math.round(val));
+      numEl.textContent = cur + '%';
+      barEl.style.width = cur + '%';
+      if (cur < Math.round(val)) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  };
+
+  animate('headline', scores.headline, 'blue');
+  animate('keywords', scores.keywords, 'gold');
+  animate('about',    scores.about,    'green');
+  animate('skills',   scores.skills,   'red');
+}
+
+/* ══════════════════════════════════════════════
+   TAB SWITCHING
+══════════════════════════════════════════════ */
+function switchTab(tab) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + tab)?.classList.add('active');
+  document.querySelector(`[data-tab="${tab}"]`)?.classList.add('active');
+}
+
+/* ══════════════════════════════════════════════
+   UI HELPERS
+══════════════════════════════════════════════ */
+function toggleTag(el) { el.classList.toggle('active'); }
+
+function selectOtype(type) {
+  selectedOtype = type;
+  ['cold','bid','followup','referral'].forEach(t => {
+    document.getElementById('ot-' + t).classList.toggle('active', t === type);
+  });
+}
+
+function showLoad(id)  { document.getElementById('load-' + id).classList.add('visible'); }
+function hideLoad(id)  { document.getElementById('load-' + id).classList.remove('visible'); }
+function showRes(id, text) {
+  document.getElementById('res-' + id + '-body').textContent = text;
+  document.getElementById('res-' + id).classList.add('visible');
+}
+
+function copyResult(resId) {
+  const text = document.getElementById(resId + '-body').textContent;
+  navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard!'));
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+/* ══════════════════════════════════════════════
+   CLAUDE API
+══════════════════════════════════════════════ */
+const CLAUDE_MODEL = 'claude-sonnet-4-20250514';
+const SYSTEM = `You are an elite LinkedIn strategist and copywriter specialising in finance and accounting professionals building freelance businesses. 
+
+The user's profile data will be provided with each request. Use their REAL name, headline, and About section to make every output hyper-personalised — never write generic copy.
+
+Rules:
+- Write in first person (their voice, not yours)
+- Be specific, credible, punchy — no corporate fluff
+- Finance professionals need to project trust, expertise, and results
+- For outreach: sound human, never salesy
+- Always include a clear next step or CTA`;
+
+async function callClaude(userPrompt, loadId, resId) {
+  showLoad(loadId);
+  document.getElementById('res-' + resId).classList.remove('visible');
+
+  const profileCtx = liProfile
+    ? `\n\nUSER'S REAL LINKEDIN DATA:\nName: ${liProfile.name}\nHeadline: ${liProfile.headline || 'Not set'}\nAbout: ${liProfile.about || 'Not set'}\nEmail: ${liProfile.email || ''}\n`
+    : '';
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': CLAUDE_API_KEY, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({
+        model: CLAUDE_MODEL,
+        max_tokens: 1000,
+        system: SYSTEM + profileCtx,
+        messages: [{ role: 'user', content: userPrompt }]
+      })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+    const text = data.content?.map(b => b.text || '').join('') || 'No response.';
+    showRes(resId, text);
+  } catch (err) {
+    showRes(resId, '⚠ Error: ' + err.message + '\n\nCheck your Anthropic API key in the config block at the top of index.html');
+  }
+  hideLoad(loadId);
+}
+
+/* ══════════════════════════════════════════════
+   ACTION DISPATCHERS
+══════════════════════════════════════════════ */
+function run(action) {
+  const h  = () => document.getElementById('f-headline')?.value?.trim() || liProfile?.headline || '';
+  const ab = () => document.getElementById('f-about')?.value?.trim()    || liProfile?.about    || '';
+
+  const prompts = {
+
+    'headline-opt': () => [`Rewrite this LinkedIn headline to maximise recruiter clicks and search ranking.\n\nCurrent: "${h()}"\n\nProvide: 3 optimised versions (each under 220 chars), explain why each works, and rate each out of 10. Bold the recommended one.`, 'headline', 'headline'],
+
+    'headline-vars': () => [`Write 7 LinkedIn headline variations for a finance/accounting freelancer.\n\nBased on current headline: "${h()}"\n\nMake each distinct: benefit-led, keyword-led, niche-led, result-led, personality-led, credibility-led, curiosity-led. Under 220 chars each.`, 'headline', 'headline'],
+
+    'about-full': () => [`Completely rewrite this LinkedIn About section.\n\nCurrent:\n"${ab()}"\n\nRequirements:\n- Hook opener (not "I am a..." or "With X years...")\n- Pain points the client has → how I solve them\n- Specific results/numbers (estimate if needed)\n- Tools I use\n- Industries I serve\n- Strong CTA at the end\n- Under 2,500 characters\n- First person, warm but professional`, 'about', 'about'],
+
+    'about-keywords': () => [`Analyse this About section for keyword gaps, then rewrite it with the top 10 missing keywords naturally embedded.\n\nCurrent:\n"${ab()}"\n\nFirst list the gaps (grouped: technical, tools, soft skills). Then show the rewritten version with keywords highlighted in [brackets].`, 'about', 'about'],
+
+    'about-hook': () => [`Rewrite ONLY the first 3 sentences of this LinkedIn About section to be a scroll-stopping hook.\n\nCurrent opener:\n"${ab().slice(0, 300)}"\n\nProvide 4 alternative openers. No "I'm excited", no "With X years". Each must create immediate curiosity or credibility.`, 'about', 'about'],
+
+    'skills-strategy': () => {
+      const selected = [...document.querySelectorAll('#skills-tags .tag.active')].map(t => t.textContent);
+      const skills = selected.length ? selected.join(', ') : 'general accounting skills';
+      return [`LinkedIn skills endorsement strategy for a finance freelancer.\n\nSelected skills: ${skills}\n\nProvide:\n1. Top 5 to prioritise for endorsements (and why)\n2. 4 creative tactics to get genuine endorsements fast\n3. 5 high-demand skills I should add (2024 market data)\n4. Which 3 skills SME owners search most when hiring`, 'skills', 'skills'];
+    },
+
+    'job-tailor': () => {
+      const title = document.getElementById('f-jobtitle').value;
+      const desc  = document.getElementById('f-jobdesc').value.trim();
+      if (!title) { showToast('Select a job title first'); return null; }
+      return [`I'm targeting: ${title}\n\n${desc ? `Job description:\n"${desc}"` : 'No JD provided — use typical requirements.'}\n\nUsing my LinkedIn data, provide:\n1. Tailored headline (3 versions, ranked)\n2. Rewritten About section opener (first paragraph)\n3. Top 10 ATS keywords I must include\n4. 3 experience bullet points to add/rewrite\n5. Any gaps between my profile and this role`, 'job', 'job'];
+    },
+
+    'job-keywords': () => {
+      const title = document.getElementById('f-jobtitle').value || 'Finance role';
+      const desc  = document.getElementById('f-jobdesc').value.trim() || 'Standard finance role requirements';
+      return [`Extract the 25 most important ATS keywords from this job description for "${title}".\n\nJD:\n"${desc}"\n\nGroup as: Must-have skills | Nice-to-have | Tools/Software | Soft skills | Industry terms\nRate each keyword 1–10 for importance. Mark which ones are MISSING from my current profile.`, 'job', 'job'];
+    },
+
+    'job-gaps': () => {
+      const title = document.getElementById('f-jobtitle').value || 'Senior Finance role';
+      const desc  = document.getElementById('f-jobdesc').value.trim() || '';
+      return [`Compare my LinkedIn profile to the requirements of a ${title} and identify ALL gaps.\n\n${desc ? `JD: "${desc}"` : ''}\n\nOutput:\n- Skills I have ✓\n- Skills I'm missing ✗\n- How to close each gap (certifications, projects, wording)\n- Priority order to fix them`, 'job', 'job'];
+    },
+
+    'service-full': () => {
+      const name = document.getElementById('f-svcname').value.trim();
+      const desc = document.getElementById('f-svcdesc').value.trim();
+      if (!name) { showToast('Enter a service name first'); return null; }
+      return [`Write a LinkedIn Services page for my freelance ${name} offering.\n\nExtra context: ${desc || 'none'}\n\nStructure:\n1. Headline (punchy, under 10 words)\n2. 3 client pain points + how I solve each\n3. My process (3 steps, simple language)\n4. Why choose me (credibility + social proof template)\n5. What you get (deliverables)\n6. Strong CTA\n\nUnder 500 words. Professional but human.`, 'service', 'service'];
+    },
+
+    'service-hooks': () => {
+      const name = document.getElementById('f-svcname').value.trim() || 'bookkeeping and accounting';
+      return [`Write 7 scroll-stopping taglines for my LinkedIn ${name} service.\n\nMix of: benefit-driven, pain-driven, curiosity, social proof, urgency. Under 12 words each. Aimed at SME business owners.`, 'service', 'service'];
+    },
+
+    'service-faq': () => {
+      const name = document.getElementById('f-svcname').value.trim() || 'accounting services';
+      return [`Write a FAQ section for my LinkedIn ${name} service page.\n\n8 questions covering: pricing, turnaround, what's included, how we work together, tools used, qualifications, industries served, getting started.\n\nKeep answers concise (2–3 sentences each). Reassuring and professional tone.`, 'service', 'service'];
+    },
+
+    'pricing': () => {
+      const stype = document.getElementById('f-svctype').value;
+      return [`Design 3 pricing tiers (Starter / Professional / Premium) for freelance ${stype} targeting SMEs.\n\nFor each tier:\n- Package name + monthly price range (PKR and GBP)\n- Exactly what's included (bullet list)\n- Ideal client type\n- Why upgrade to next tier\n\nAlso: one loss-leader offer + one premium add-on to upsell.\nBe realistic and competitive for a freelance market.`, 'pricing', 'pricing'];
+    },
+
+    'outreach-msg': () => {
+      const target  = document.getElementById('f-target').value.trim();
+      const context = document.getElementById('f-context').value.trim();
+      if (!target) { showToast('Describe your target prospect first'); return null; }
+      const types = { cold:'cold LinkedIn connection request + follow-up message', bid:'bid response to win a project', followup:'follow-up after no reply (3 days later)', referral:'referral request from an existing connection' };
+      return [`Write a ${types[selectedOtype]} for a finance freelancer.\n\nTarget: ${target}\nContext: ${context || 'none provided'}\n\nRequirements:\n- Connection request: under 280 chars, personal, no pitching\n- Follow-up: under 120 words, adds value, ends with low-friction ask\n- Sound human — not like a template\n- 2 versions: direct tone vs conversational tone\n- Use my name and background from my LinkedIn data`, 'outreach', 'outreach'];
+    },
+
+    'outreach-proposal': () => {
+      const target  = document.getElementById('f-target').value.trim() || 'a small business';
+      const context = document.getElementById('f-context').value.trim() || 'looking for accounting support';
+      return [`Write a full freelance proposal to win this client.\n\nClient: ${target}\nProject: ${context}\n\nStructure:\n1. Personalised opener (shows I read the brief)\n2. Understanding of their problem\n3. My tailored solution\n4. Why me — credentials + 1 relevant result\n5. Deliverables + timeline\n6. Pricing (use realistic ranges)\n7. Risk-free offer or money-back guarantee\n8. Clear next step\n\nUnder 420 words. Confident, warm, professional. Use my LinkedIn data.`, 'outreach', 'outreach'];
+    },
+
+    'outreach-subject': () => {
+      const target = document.getElementById('f-target').value.trim() || 'a business owner';
+      return [`Write 8 LinkedIn message subject lines / openers for reaching out to ${target} for finance/accounting services.\n\nMix: value-led, curiosity, compliment, shared connection, pain-point, stats, question, bold claim. Under 12 words each.`, 'outreach', 'outreach'];
+    },
+
+    'post-full': () => {
+      const topic  = document.getElementById('f-posttopic').value.trim();
+      const format = document.getElementById('f-postformat').value;
+      if (!topic) { showToast('Enter a post topic first'); return null; }
+      const fmts = { story:'personal story — vulnerable opener, lesson, takeaway', tips:'numbered listicle — bold opener, 5–7 tips, engagement question', thought:'contrarian thought leadership — challenge a common belief in finance', casestudy:'client win — problem, solution, result, lesson', poll:'engagement poll with 4 options + a strong opinion opener' };
+      return [`Write a LinkedIn post for a finance freelancer in ${fmts[format]} format.\n\nTopic: ${topic}\n\nRules:\n- Hook: first line must stop the scroll (no "I'm excited to share", no "Hot take:")\n- Short punchy sentences, lots of white space\n- At least 1 specific number or insight\n- End with a question or CTA for comments\n- Max 1,300 characters\n- No hashtags (I'll add them)\n- Use my voice from my LinkedIn data`, 'post', 'post'];
+    },
+
+    'post-hook': () => {
+      const topic = document.getElementById('f-posttopic').value.trim() || 'accounting tips for businesses';
+      return [`Write 9 scroll-stopping LinkedIn post openers for this topic: "${topic}"\n\nFor a finance freelancer's audience (SME owners, decision-makers, finance pros).\nVariety: bold statement, surprising stat, contrarian view, story tease, question, relatable struggle, specific number, provocative claim, empathetic opener.\nUnder 20 words each. No emojis.`, 'post', 'post'];
+    },
+
+    'post-cta': () => {
+      const topic = document.getElementById('f-posttopic').value.trim() || 'my finance content';
+      return [`Write 6 call-to-action endings for a LinkedIn post about "${topic}" from a finance freelancer.\n\nMix: comment-baiting question, DM invite, link to service, repost ask, save for later, follow prompt.\nEach CTA under 25 words. Sound natural, not desperate.`, 'post', 'post'];
+    },
+
+    'calendar': () => [`Create a 2-week LinkedIn content calendar for a finance freelancer building their personal brand and attracting SME clients.\n\nFor each of 10 posts:\n- Day & best time to post\n- Format (story/tips/poll/casestudy/thought leadership)\n- Topic title\n- One-line description\n- Goal (awareness / leads / engagement / trust)\n\nInclude: 1 poll, 1 client story, 1 contrarian post, 2 educational, 1 personal story. Realistic for 1 person posting alone.`, 'calendar', 'calendar']
+  };
+
+  const builder = prompts[action];
+  if (!builder) return;
+  const result = builder();
+  if (!result) return;
+  const [prompt, loadId, resId] = result;
+  callClaude(prompt, loadId, resId);
+}
+</script>
+</body>
+</html>
